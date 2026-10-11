@@ -29,6 +29,8 @@ export const Navbar: React.FC<{ onToggleMobileMenu: () => void; isMobileMenuOpen
     syncSummary,
     handleManualSync,
     setActiveTab,
+    logout,
+    factoryReset,
   } = useApp();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -142,49 +144,62 @@ export const Navbar: React.FC<{ onToggleMobileMenu: () => void; isMobileMenuOpen
               </div>
             </button>
 
-            {/* Dropdown for Role Switching */}
+            {/* User Profile & Logout Dropdown */}
             {showUserDropdown && (
               <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 text-slate-200">
-                <div className="px-3 py-2 border-b border-slate-800">
-                  <div className="text-xs text-slate-400">Ganti Profil Aktif (Simulasi Hak Akses)</div>
-                  <div className="text-sm font-semibold text-white mt-0.5">{activeUser?.name}</div>
+                <div className="px-3 py-2.5 border-b border-slate-800">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+                    Sesi Kerja Aktif
+                  </div>
+                  <div className="text-sm font-bold text-white mt-0.5">{activeUser?.name}</div>
+                  <div className="text-xs text-amber-400 capitalize font-medium">
+                    Peran: {activeUser?.role === 'owner' ? 'Owner (Pemilik)' : activeUser?.role === 'manager' ? 'Manajer' : 'Kasir'}
+                  </div>
+                  {activeUser?.email && (
+                    <div className="text-[10px] text-slate-400 mt-0.5 truncate">{activeUser.email}</div>
+                  )}
                 </div>
 
-                <div className="py-1 space-y-1">
-                  {allUsers.map((user) => (
-                    <button
-                      key={user.id}
-                      onClick={() => {
-                        setActiveUser(user);
-                        setShowUserDropdown(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition ${
-                        activeUser?.id === user.id ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'hover:bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        <div>
-                          <div>{user.name}</div>
-                          <div className="text-[10px] text-slate-400 capitalize">{user.role}</div>
-                        </div>
-                      </div>
-                      {activeUser?.id === user.id && (
-                        <ShieldCheck className="w-4 h-4 text-amber-400" />
-                      )}
-                    </button>
-                  ))}
-                </div>
+                <div className="py-1.5 space-y-1">
+                  {activeUser?.role === 'owner' && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setActiveTab('staff');
+                          setShowUserDropdown(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                      >
+                        <User className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Kelola Pekerja & PIN</span>
+                      </button>
 
-                <div className="pt-2 border-t border-slate-800 text-center">
+                      <button
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          if (window.confirm('PERINGATAN: Apakah Anda yakin ingin mereset seluruh data ke setelan awal pabrik? Semua akun pengguna, menu, dan transaksi akan dikosongkan.')) {
+                            factoryReset();
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs text-amber-400 hover:bg-amber-500/10 font-semibold transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Reset Data Toko (Kosongkan)</span>
+                      </button>
+                    </>
+                  )}
+
                   <button
                     onClick={() => {
-                      setActiveTab('staff');
                       setShowUserDropdown(false);
+                      logout();
                     }}
-                    className="text-[11px] text-amber-400 hover:text-amber-300 transition"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 font-semibold transition"
                   >
-                    Kelola Staf & PIN Kasir &rarr;
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Kunci / Keluar (Logout)</span>
                   </button>
                 </div>
               </div>

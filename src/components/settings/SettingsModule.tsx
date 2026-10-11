@@ -20,11 +20,20 @@ import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { getAllFromStore, putToStore } from '../../services/db';
 
 export const SettingsModule: React.FC = () => {
-  const { settings, updateSettings, showToast } = useApp();
+  const {
+    settings,
+    updateSettings,
+    showToast,
+    factoryReset,
+    resetTransactions,
+    seedSampleData,
+  } = useApp();
 
   const [formData, setFormData] = useState<CafeSettings>({ ...settings });
   const [isSaving, setIsSaving] = useState(false);
   const [showSQLModal, setShowSQLModal] = useState(false);
+  const [showResetAllModal, setShowResetAllModal] = useState(false);
+  const [showResetTxModal, setShowResetTxModal] = useState(false);
 
   const handleChange = (field: keyof CafeSettings, val: any) => {
     setFormData((prev) => ({ ...prev, [field]: val }));
@@ -417,8 +426,87 @@ export const SettingsModule: React.FC = () => {
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Jika dikosongkan, KedaiOS tetap berjalan 100% fungsional menggunakan IndexedDB offline-first lokal dengan relay sinkronisasi otomatis.
+            Jika dikosongkan, POS Lapak tetap berjalan 100% fungsional menggunakan IndexedDB offline-first lokal dengan relay sinkronisasi otomatis.
           </p>
+        </div>
+
+        {/* SECTION 7: DANGER ZONE & RESET DATA */}
+        <div className="bg-rose-50/60 border border-rose-200 p-5 rounded-3xl space-y-4">
+          <div className="border-b border-rose-200 pb-3">
+            <h3 className="font-extrabold text-sm text-rose-900 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600" />
+              <span>Zona Bahaya: Reset & Pembersihan Data Toko</span>
+            </h3>
+            <p className="text-xs text-rose-700/80 mt-1">
+              Gunakan opsi ini jika Anda ingin mengosongkan seluruh data untuk memulai kafe baru atau membersihkan transaksi uji coba.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. Factory Reset */}
+            <div className="p-4 rounded-2xl bg-white border border-rose-200 flex flex-col justify-between space-y-3 shadow-xs">
+              <div>
+                <h4 className="font-extrabold text-xs text-rose-700">
+                  Kosongkan Semua Data (Reset Total)
+                </h4>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Menghapus <strong>seluruh data</strong> di IndexedDB: semua akun staf & Owner, produk menu, inventaris, transaksi, dan pengeluaran. POS Lapak akan kembali ke kondisi kosong bersih.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowResetAllModal(true)}
+                className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs shadow-sm transition"
+              >
+                Kosongkan Semua Data
+              </button>
+            </div>
+
+            {/* 2. Reset Transactions Only */}
+            <div className="p-4 rounded-2xl bg-white border border-amber-200 flex flex-col justify-between space-y-3 shadow-xs">
+              <div>
+                <h4 className="font-extrabold text-xs text-amber-800">
+                  Kosongkan Riwayat Transaksi Saja
+                </h4>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Menghapus seluruh riwayat penjualan, pengeluaran, mutasi stok, dan shift kasir. <strong>Katalog produk & akun pekerja tetap tersimpan.</strong>
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowResetTxModal(true)}
+                className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition"
+              >
+                Kosongkan Transaksi Saja
+              </button>
+            </div>
+
+            {/* 3. Load Sample Demo */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
+              <div>
+                <h4 className="font-extrabold text-xs text-slate-800">
+                  Muat Menu Contoh (Demo)
+                </h4>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Tambahkan 4 menu kopi & makanan beserta bahan baku resep untuk keperluan pengujian transaksi tanpa mengetik manual.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('Muat contoh menu kopi & resep ke katalog?')) {
+                    await seedSampleData();
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition"
+              >
+                Muat Menu Contoh
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* SAVE BUTTON */}
@@ -479,6 +567,94 @@ CREATE POLICY "Public insert sales" ON sales FOR INSERT WITH CHECK (true);
             >
               Tutup Panduan SQL
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: FACTORY RESET CONFIRMATION */}
+      {showResetAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-base text-rose-500 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              <span>Konfirmasi: Kosongkan Seluruh Data Toko?</span>
+            </h3>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Tindakan ini akan <strong>menghapus bersih seluruh data</strong> di database lokal perangkat Anda:
+            </p>
+
+            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <li>Akun Pemilik (Owner) & seluruh akun staf/pekerja</li>
+              <li>Seluruh daftar produk menu & kategori</li>
+              <li>Seluruh inventaris bahan baku & resep</li>
+              <li>Seluruh riwayat transaksi penjualan & pengeluaran</li>
+              <li>Seluruh catatan shift kasir & audit log</li>
+            </ul>
+
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-semibold">
+              ⚠️ Setelah reset selesai, Anda akan dialihkan ke layar pendaftaran Owner baru dari awal (Kondisi 100% Kosong).
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetAllModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-bold text-xs hover:bg-slate-800"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await factoryReset();
+                  setShowResetAllModal(false);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/30"
+              >
+                Ya, Kosongkan Semua
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RESET TRANSACTIONS ONLY CONFIRMATION */}
+      {showResetTxModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-extrabold text-base text-amber-500 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5" />
+              <span>Kosongkan Riwayat Transaksi Saja?</span>
+            </h3>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Tindakan ini akan menghapus riwayat penjualan kasir, laporan pengeluaran, mutasi stok penjualan, dan sesi shift kasir.
+            </p>
+
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
+              ✓ Daftar menu produk, bahan baku, dan akun staf <strong>TETAP AMAN</strong> dan tidak dihapus.
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetTxModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 font-bold text-xs hover:bg-slate-800"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await resetTransactions();
+                  setShowResetTxModal(false);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs"
+              >
+                Ya, Bersihkan Transaksi
+              </button>
+            </div>
           </div>
         </div>
       )}

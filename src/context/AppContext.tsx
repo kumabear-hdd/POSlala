@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { CafeSettings, CashSession, UserProfile } from '../types';
-import { getAllFromStore, getFromStore, onDBChange, putToStore, seedInitialDataIfNeeded } from '../services/db';
+import {
+  factoryResetDatabase,
+  getAllFromStore,
+  getFromStore,
+  onDBChange,
+  putToStore,
+  registerInitialOwner,
+  resetTransactionsAndShiftsOnly,
+  seedInitialDataIfNeeded,
+  seedSampleMenuData,
+} from '../services/db';
 import { getSyncStatusSummary, onSyncChange, SyncStatusSummary, triggerSync } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
@@ -26,8 +36,16 @@ interface AppContextType {
   activeTab: TabKey;
   setActiveTab: (tab: TabKey) => void;
   activeUser: UserProfile | null;
-  setActiveUser: (user: UserProfile) => void;
+  setActiveUser: (user: UserProfile | null) => void;
+  currentUser: UserProfile | null;
   allUsers: UserProfile[];
+  hasOwner: boolean;
+  loginWithPIN: (pin: string, userId?: string) => Promise<{ success: boolean; user?: UserProfile; message?: string }>;
+  logout: () => void;
+  registerOwner: (cafeName: string, ownerName: string, pin: string, email: string, phone: string) => Promise<UserProfile>;
+  factoryReset: () => Promise<void>;
+  resetTransactions: () => Promise<void>;
+  seedSampleData: () => Promise<void>;
   activeSession: CashSession | null;
   refreshActiveSession: () => Promise<void>;
   settings: CafeSettings;
@@ -66,7 +84,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isOnline = useOnlineStatus();
   const [activeTab, setActiveTabState] = useState<TabKey>('pos');
-  const [activeUser, setActiveUser] = useState<UserProfile | null>(null);
+  const [activeUser, setActiveUserState] = useState<UserProfile | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [activeSession, setActiveSession] = useState<CashSession | null>(null);
   const [settings, setSettings] = useState<CafeSettings>(defaultSettings);
@@ -97,7 +115,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Sync tab with URL hash for persistent navigation across reloads
+  const setActiveUser = (user: UserProfile | null) => {
+    setActiveUserState(user);
+    if (user) {
+      localStorage.setItem('pos_lapak_active_user_id', user.id);
+    } else {
+      localStorage.removeItem('pos_lapak_active_user_id');
+    }
+  };
+
+  // Sync tab with URL hash
   useEffect(() => {
     const hash = window.location.hash.replace('#', '') as TabKey;
     const validTabs: TabKey[] = [
@@ -129,7 +156,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveSession(openSession || null);
   };
 
-  // Initialize DB and core data
+  // Check if owner exists
+  const hasOwner = allUsers.some((u) => u.role === 'owner' && u.active);
+
+  // Initialize DB and authentication session
   useEffect(() => {
     let mounted = true;
 
@@ -150,13 +180,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setSettings(loadedSettings);
         }
 
-        // 2. Users
+        // 2. Users & Session Restoration
         const loadedUsers = await getAllFromStore<UserProfile>('profiles');
-        if (mounted && loadedUsers.length > 0) {
+        if (mounted) {
           setAllUsers(loadedUsers);
-          // Default to Cashier for fast POS usage or Owner
-          const defaultCashier = loadedUsers.find((u) => u.role === 'cashier') || loadedUsers[0];
-          setActiveUser(defaultCashier);
+
+          // Restore stored session if user still exists & active
+          const savedUserId = localStorage.getItem('pos_lapak_active_user_id');
+          if (savedUserId) {
+            const matchedUser = loadedUsers.find((u) => u.id === savedUserId && u.active);
+            if (matchedUser) {
+              setActiveUserState(matchedUser);
+            } else {
+              localStorage.removeItem('pos_lapak_active_user_id');
+              setActiveUserState(null);
+            }
+          } else {
+            setActiveUserState(null);
+          }
         }
 
         // 3. Active Session
@@ -184,6 +225,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (store === 'profiles' || store === 'all') {
         const u = await getAllFromStore<UserProfile>('profiles');
         setAllUsers(u);
+        const savedUserId = localStorage.getItem('pos_lapak_active_user_id');
+        if (savedUserId) {
+          const matched = u.find((x) => x.id === savedUserId && x.active);
+          setActiveUserState(matched || null);
+        }
       }
       if (store === 'cafe_settings' || store === 'all') {
         const s = await getFromStore<CafeSettings>('cafe_settings', 'default_cafe');
@@ -225,6 +271,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Real PIN Authentication
+  const loginWithPIN = async (pin: string, userId?: string) => {
+    const users = await getAllFromStore<UserProfile>('profiles');
+    let targetUser: UserProfile | undefined;
+
+    if (userId) {
+      targetUser = users.find((u) => u.id === userId && u.pin === pin && u.active);
+    }
+    // Fallback: If not matched or no specific user selected, match any active user with this PIN
+    if (!targetUser) {
+      targetUser = users.find((u) => u.pin === pin && u.active);
+    }
+
+    if (!targetUser) {
+      return {
+        success: false,
+        message: 'PIN salah atau akun tidak ditemukan. Silakan periksa kembali PIN Anda.',
+      };
+    }
+
+    setActiveUser(targetUser);
+
+    if (targetUser.role === 'cashier') {
+      setActiveTab('pos');
+    }
+
+    showToast(`Selamat bekerja, ${targetUser.name}! (${targetUser.role.toUpperCase()})`, 'success');
+    return { success: true, user: targetUser };
+  };
+
+  const logout = () => {
+    setActiveUser(null);
+    showToast('Anda telah keluar dari sesi kerja.', 'info');
+  };
+
+  // Owner Registration
+  const registerOwner = async (
+    cafeName: string,
+    ownerName: string,
+    pin: string,
+    email: string,
+    phone: string
+  ) => {
+    const { owner, settings: newSettings } = await registerInitialOwner(
+      cafeName,
+      ownerName,
+      pin,
+      email,
+      phone
+    );
+    setSettings(newSettings);
+    setActiveUser(owner);
+    const users = await getAllFromStore<UserProfile>('profiles');
+    setAllUsers(users);
+    showToast(`Pendaftaran berhasil! Selamat datang Owner ${owner.name}.`, 'success');
+    return owner;
+  };
+
+  // Factory Reset
+  const factoryReset = async () => {
+    await factoryResetDatabase();
+    localStorage.removeItem('pos_lapak_active_user_id');
+    setActiveUserState(null);
+    setActiveSession(null);
+    setAllUsers([]);
+    setSettings(defaultSettings);
+    showToast('Semua data berhasil direset ke setelan awal pabrik.', 'info');
+  };
+
+  // Reset transactions only
+  const resetTransactions = async () => {
+    await resetTransactionsAndShiftsOnly();
+    setActiveSession(null);
+    showToast('Data riwayat transaksi penjualan & shift kasir berhasil dikosongkan.', 'info');
+  };
+
+  // Seed sample menu data on demand
+  const seedSampleData = async () => {
+    await seedSampleMenuData();
+    showToast('Contoh menu & bahan baku kopi berhasil dimuat ke katalog.', 'success');
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -232,7 +360,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         activeUser,
         setActiveUser,
+        currentUser: activeUser,
         allUsers,
+        hasOwner,
+        loginWithPIN,
+        logout,
+        registerOwner,
+        factoryReset,
+        resetTransactions,
+        seedSampleData,
         activeSession,
         refreshActiveSession,
         settings,

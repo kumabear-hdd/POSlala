@@ -14,10 +14,12 @@ import { ReportsModule } from './components/reports/ReportsModule';
 import { StaffModule } from './components/staff/StaffModule';
 import { CashierSessionsModule } from './components/cashier/CashierSessionsModule';
 import { SettingsModule } from './components/settings/SettingsModule';
+import { RegisterOwnerScreen } from './components/auth/RegisterOwnerScreen';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { Coffee } from 'lucide-react';
 
-const MainLayout: React.FC = () => {
-  const { activeTab, isInitialLoading } = useApp();
+const AppContent: React.FC = () => {
+  const { activeTab, isInitialLoading, hasOwner, activeUser } = useApp();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (isInitialLoading) {
@@ -34,6 +36,27 @@ const MainLayout: React.FC = () => {
     );
   }
 
+  // 1. First-time setup: If no owner registered yet
+  if (!hasOwner) {
+    return (
+      <>
+        <ToastContainer />
+        <RegisterOwnerScreen />
+      </>
+    );
+  }
+
+  // 2. Authentication: If not logged in with PIN
+  if (!activeUser) {
+    return (
+      <>
+        <ToastContainer />
+        <LoginScreen />
+      </>
+    );
+  }
+
+  // 3. Authenticated App Layout
   const renderActiveModule = () => {
     switch (activeTab) {
       case 'pos':
@@ -92,7 +115,7 @@ const MainLayout: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <MainLayout />
+      <AppContent />
     </AppProvider>
   );
 }

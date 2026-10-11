@@ -21,7 +21,7 @@ import { formatRupiah, generateUUID } from '../../utils/format';
 import { useApp } from '../../context/AppContext';
 
 export const ProductsModule: React.FC = () => {
-  const { showToast, activeUser } = useApp();
+  const { showToast, activeUser, seedSampleData } = useApp();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -273,7 +273,40 @@ export const ProductsModule: React.FC = () => {
       </div>
 
       {/* Product Cards Table / Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {filteredProducts.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-md mx-auto space-y-4 shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+            <UtensilsCrossed className="w-7 h-7" />
+          </div>
+          <div>
+            <h3 className="font-black text-slate-900 text-base">
+              {products.length === 0 ? 'Belum Ada Menu di Katalog' : 'Tidak Ada Menu yang Cocok'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              {products.length === 0
+                ? 'Katalog produk Anda masih bersih. Tambahkan menu kafe Anda sekarang atau muat contoh menu demo.'
+                : 'Coba ubah kata kunci pencarian atau pilih kategori lain.'}
+            </p>
+          </div>
+          {products.length === 0 && (
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <button
+                onClick={openAddModal}
+                className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition"
+              >
+                + Tambah Menu Baru
+              </button>
+              <button
+                onClick={seedSampleData}
+                className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition"
+              >
+                Muat Menu Contoh
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredProducts.map((p) => {
           const cat = categories.find((c) => c.id === p.categoryId);
           const profit = p.price - (p.costPrice || 0);
@@ -359,6 +392,7 @@ export const ProductsModule: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* MODAL: Add / Edit Product */}
       {isModalOpen && (

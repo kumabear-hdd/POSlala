@@ -25,7 +25,15 @@ import { QRISPaymentModal } from './QRISPaymentModal';
 import { ReceiptModal } from './ReceiptModal';
 
 export const POSModule: React.FC = () => {
-  const { settings, activeUser, activeSession, showToast, isOnline, setActiveTab } = useApp();
+  const {
+    settings,
+    activeUser,
+    activeSession,
+    showToast,
+    isOnline,
+    setActiveTab,
+    seedSampleData,
+  } = useApp();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -397,10 +405,37 @@ export const POSModule: React.FC = () => {
         {/* Product Grid */}
         <div className="flex-1 p-4 overflow-y-auto">
           {filteredProducts.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-              <Info className="w-10 h-10 mb-2 text-slate-300" />
-              <p className="font-semibold text-slate-600">Tidak ada produk yang cocok</p>
-              <p className="text-xs text-slate-400 mt-1">Coba kata kunci pencarian lain atau pilih kategori Semua.</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 text-center max-w-sm mx-auto space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <Info className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="font-extrabold text-slate-800 text-sm">
+                  {products.length === 0 ? 'Katalog Menu Masih Kosong' : 'Tidak Ada Menu yang Cocok'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {products.length === 0
+                    ? 'POS Lapak dalam kondisi bersih. Tambahkan menu kafe Anda atau muat menu contoh untuk mulai bertransaksi.'
+                    : 'Coba kata kunci pencarian lain atau pilih kategori Semua Menu.'}
+                </p>
+              </div>
+
+              {products.length === 0 && (
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 w-full">
+                  <button
+                    onClick={() => setActiveTab('products')}
+                    className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition"
+                  >
+                    + Tambah Menu Baru
+                  </button>
+                  <button
+                    onClick={() => seedSampleData()}
+                    className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition"
+                  >
+                    Muat Menu Contoh
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">

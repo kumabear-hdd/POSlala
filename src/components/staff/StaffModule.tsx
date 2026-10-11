@@ -9,9 +9,11 @@ import {
   Edit2,
   Lock,
   UserCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Role, UserProfile } from '../../types';
-import { getAllFromStore, onDBChange, putToStore } from '../../services/db';
+import { deleteFromStore, getAllFromStore, onDBChange, putToStore } from '../../services/db';
 import { formatDateTime, generateUUID } from '../../utils/format';
 import { useApp } from '../../context/AppContext';
 
@@ -20,6 +22,7 @@ export const StaffModule: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [showPins, setShowPins] = useState<Record<string, boolean>>({});
 
   // Form states
   const [name, setName] = useState('');
@@ -27,6 +30,10 @@ export const StaffModule: React.FC = () => {
   const [pin, setPin] = useState('1234');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+
+  const togglePinVisibility = (userId: string) => {
+    setShowPins((prev) => ({ ...prev, [userId]: !prev[userId] }));
+  };
 
   const openAddModal = () => {
     setEditingUser(null);
@@ -48,11 +55,26 @@ export const StaffModule: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleDeleteUser = async (u: UserProfile) => {
+    if (u.role === 'owner') {
+      showToast('Akun Pemilik (Owner) tidak dapat dihapus.', 'warning');
+      return;
+    }
+    if (u.id === activeUser?.id) {
+      showToast('Anda sedang login dengan akun ini, tidak dapat menghapus diri sendiri.', 'warning');
+      return;
+    }
+    if (window.confirm(`Hapus akun pekerja "${u.name}" (${u.role.toUpperCase()})? Akses login PIN mereka akan dicabut.`)) {
+      await deleteFromStore('profiles', u.id);
+      showToast(`Pekerja "${u.name}" berhasil dihapus.`, 'info');
+    }
+  };
+
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    if (!pin || pin.length < 4) {
-      showToast('PIN otorisasi minimal 4 digit angka.', 'warning');
+    if (!pin || pin.length < 4 || pin.length > 6) {
+      showToast('PIN login pekerja harus berupa 4-6 digit angka.', 'warning');
       return;
     }
 
@@ -62,14 +84,14 @@ export const StaffModule: React.FC = () => {
       name: name.trim(),
       role,
       pin: pin.trim(),
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@kedai.com`,
+      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, '')}@poslapak.id`,
       phone: phone.trim() || '0812-0000-0000',
       active: true,
       createdAt: editingUser ? editingUser.createdAt : now,
     };
 
     await putToStore('profiles', profile);
-    showToast(`Data staf "${profile.name}" berhasil disimpan.`, 'success');
+    showToast(`Data pekerja "${profile.name}" berhasil disimpan dengan PIN: ${profile.pin}`, 'success');
     setIsModalOpen(false);
   };
 
@@ -177,27 +199,56 @@ export const StaffModule: React.FC = () => {
                 </div>
 
                 <h4 className="font-black text-base text-slate-900 mt-2">{u.name}</h4>
-                <div className="text-xs text-slate-500 space-y-0.5 mt-1">
-                  <div>Email: {u.email}</div>
-                  <div>Telp: {u.phone}</div>
-                  <div className="flex items-center gap-1.5 pt-1 text-slate-700 font-semibold">
-                    <Key className="w-3 h-3 text-slate-400" />
-                    <span>PIN: ****</span>
+                <div className="text-xs text-slate-500 space-y-1 mt-1.5">
+                  <div className="truncate">Email: {u.email}</div>
+                  <div>WhatsApp: {u.phone}</div>
+                  
+                  {/* PIN Display & Visibility Toggle */}
+                  <div className="flex items-center justify-between pt-1 text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
+                      <Key className="w-3.5 h-3.5 text-amber-500" />
+                      <span>PIN:</span>
+                      <span className="tracking-widest font-black text-amber-900">
+                        {showPins[u.id] ? u.pin : '••••'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => togglePinVisibility(u.id)}
+                      className="text-slate-400 hover:text-slate-700 p-1"
+                      title={showPins[u.id] ? 'Sembunyikan PIN' : 'Lihat PIN'}
+                    >
+                      {showPins[u.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-[10px] text-slate-400">
                   Didaftarkan: {formatDateTime(u.createdAt)}
                 </span>
-                <button
-                  onClick={() => openEditModal(u)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition"
-                >
-                  <Edit2 className="w-3 h-3" />
-                  <span>Edit</span>
-                </button>
+                
+                <div className="flex items-center gap-1.5">
+                  {u.role !== 'owner' && u.id !== activeUser?.id && (
+                    <button
+                      onClick={() => handleDeleteUser(u)}
+                      className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1 transition"
+                      title="Hapus Staf"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Hapus</span>
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => openEditModal(u)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Edit</span>
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -248,16 +299,23 @@ export const StaffModule: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">PIN Otorisasi (4 Digit):</label>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    PIN Login Masuk (4-6 Angka):
+                  </label>
                   <input
-                    type="password"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={6}
                     required
                     value={pin}
-                    onChange={(e) => setPin(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold tracking-widest text-center"
-                    placeholder="1234"
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold tracking-widest text-center text-slate-900"
+                    placeholder="Contoh: 1234"
                   />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Pekerja menggunakan PIN ini saat login.
+                  </p>
                 </div>
               </div>
 

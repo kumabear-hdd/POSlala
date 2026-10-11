@@ -162,7 +162,139 @@ export async function deleteFromStore(storeName: string, id: string): Promise<vo
   });
 }
 
-// Seed Initial Data
+export async function clearStore(storeName: string): Promise<void> {
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const req = store.clear();
+    req.onsuccess = () => {
+      notifyChange(storeName);
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function factoryResetDatabase(): Promise<void> {
+  const allStores = [
+    'cafe_settings',
+    'profiles',
+    'categories',
+    'ingredients',
+    'products',
+    'sales',
+    'inventory_movements',
+    'suppliers',
+    'purchase_orders',
+    'expenses',
+    'cash_sessions',
+    'refunds',
+    'audit_logs',
+    'sync_queue',
+  ];
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(allStores, 'readwrite');
+    allStores.forEach((storeName) => {
+      tx.objectStore(storeName).clear();
+    });
+    tx.oncomplete = () => {
+      notifyChange('all');
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function resetTransactionsAndShiftsOnly(): Promise<void> {
+  const stores = ['sales', 'inventory_movements', 'expenses', 'cash_sessions', 'refunds', 'sync_queue'];
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(stores, 'readwrite');
+    stores.forEach((storeName) => {
+      tx.objectStore(storeName).clear();
+    });
+    tx.oncomplete = () => {
+      notifyChange('all');
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Register Initial Owner Account & Cafe Settings
+export async function registerInitialOwner(
+  cafeName: string,
+  ownerName: string,
+  pin: string,
+  email: string,
+  phone: string
+): Promise<{ owner: UserProfile; settings: CafeSettings }> {
+  const db = await getDB();
+  const tx = db.transaction(['cafe_settings', 'profiles', 'categories', 'audit_logs'], 'readwrite');
+
+  const now = new Date().toISOString();
+
+  const settings: CafeSettings = {
+    id: 'default_cafe',
+    name: cafeName.trim() || 'POS Lapak',
+    tagline: 'Sistem Manajemen Kafe & Kasir Pintar',
+    address: 'Alamat Toko / Kafe',
+    phone: phone.trim() || '0812-3456-7890',
+    email: email.trim() || 'owner@poslapak.id',
+    taxPercentage: 10,
+    servicePercentage: 0,
+    currency: 'IDR',
+    receiptFooter: `Terima kasih telah berkunjung ke ${cafeName.trim() || 'POS Lapak'}!\nFollow IG: @poslapak.id`,
+    paperWidth: '58mm',
+    singleCashierMode: true,
+    qrisMerchantName: (cafeName.trim() || 'POS LAPAK INDONESIA').toUpperCase(),
+    qrisNmid: 'ID1020304050607',
+    autoSyncOnOnline: true,
+  };
+  tx.objectStore('cafe_settings').put(settings);
+
+  const ownerProfile: UserProfile = {
+    id: 'usr_' + generateUUID(),
+    name: ownerName.trim(),
+    role: 'owner',
+    pin: pin.trim(),
+    email: email.trim() || 'owner@poslapak.id',
+    phone: phone.trim() || '0812-3456-7890',
+    active: true,
+    createdAt: now,
+  };
+  tx.objectStore('profiles').put(ownerProfile);
+
+  // Default Categories
+  const initialCategories: Category[] = [
+    { id: 'cat_coffee', name: 'Espresso & Kopi', sortOrder: 1 },
+    { id: 'cat_noncoffee', name: 'Non-Kopi & Teh', sortOrder: 2 },
+    { id: 'cat_food', name: 'Makanan & Snack', sortOrder: 3 },
+  ];
+  initialCategories.forEach((c) => tx.objectStore('categories').put(c));
+
+  const log: AuditLog = {
+    id: generateUUID(),
+    timestamp: now,
+    userName: ownerProfile.name,
+    role: 'owner',
+    action: 'Pendaftaran Akun Pemilik (Owner)',
+    details: `Owner ${ownerProfile.name} berhasil mendaftarkan kafe "${settings.name}".`,
+  };
+  tx.objectStore('audit_logs').put(log);
+
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => {
+      notifyChange('all');
+      resolve({ owner: ownerProfile, settings });
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Seed Initial Data (Only Settings & minimal setup, NOT mock products)
 export async function seedInitialDataIfNeeded(): Promise<void> {
   const settings = await getAllFromStore<CafeSettings>('cafe_settings');
   if (settings.length > 0) {
@@ -170,12 +302,8 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
   }
 
   const db = await getDB();
-  const tx = db.transaction(
-    ['cafe_settings', 'profiles', 'categories', 'ingredients', 'products', 'suppliers', 'cash_sessions', 'audit_logs'],
-    'readwrite'
-  );
+  const tx = db.transaction(['cafe_settings'], 'readwrite');
 
-  // 1. Settings
   const initialSettings: CafeSettings = {
     id: 'default_cafe',
     name: 'POS Lapak',
@@ -195,42 +323,26 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
   };
   tx.objectStore('cafe_settings').put(initialSettings);
 
-  // 2. Profiles (Staff & Roles)
-  const initialProfiles: UserProfile[] = [
-    {
-      id: 'usr_owner',
-      name: 'Budi Hartanto',
-      role: 'owner',
-      pin: '1234',
-      email: 'owner@kedaibahagia.id',
-      phone: '0811-1234-5678',
-      active: true,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'usr_manager',
-      name: 'Siti Rahma',
-      role: 'manager',
-      pin: '2222',
-      email: 'manager@kedaibahagia.id',
-      phone: '0812-9876-5432',
-      active: true,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'usr_cashier',
-      name: 'Dimas Pratama',
-      role: 'cashier',
-      pin: '1111',
-      email: 'kasir1@kedaibahagia.id',
-      phone: '0813-5555-7777',
-      active: true,
-      createdAt: new Date().toISOString(),
-    },
-  ];
-  initialProfiles.forEach((p) => tx.objectStore('profiles').put(p));
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => {
+      notifyChange('cafe_settings');
+      resolve();
+    };
+    tx.onerror = () => reject(tx.error);
+  });
+}
 
-  // 3. Categories
+// Explicit Helper: Seed Sample Coffee Menu Data (Optional, called on demand)
+export async function seedSampleMenuData(): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(
+    ['categories', 'ingredients', 'products', 'suppliers', 'audit_logs'],
+    'readwrite'
+  );
+
+  const now = new Date().toISOString();
+
+  // Categories
   const initialCategories: Category[] = [
     { id: 'cat_coffee', name: 'Espresso & Kopi', sortOrder: 1 },
     { id: 'cat_noncoffee', name: 'Non-Kopi & Teh', sortOrder: 2 },
@@ -239,8 +351,7 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
   ];
   initialCategories.forEach((c) => tx.objectStore('categories').put(c));
 
-  // 4. Ingredients
-  const now = new Date().toISOString();
+  // Ingredients
   const initialIngredients: Ingredient[] = [
     { id: 'ing_arabica', name: 'Biji Kopi Arabika Gayo', unit: 'gram', currentStock: 5000, minStock: 1000, costPerUnit: 220, updatedAt: now },
     { id: 'ing_robusta', name: 'Biji Kopi Robusta Lampung', unit: 'gram', currentStock: 4000, minStock: 1000, costPerUnit: 120, updatedAt: now },
@@ -250,7 +361,6 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
     { id: 'ing_cokelat', name: 'Cokelat Batavia Murni', unit: 'gram', currentStock: 2500, minStock: 500, costPerUnit: 150, updatedAt: now },
     { id: 'ing_tea', name: 'Daun Teh Melati Artisan', unit: 'gram', currentStock: 2000, minStock: 300, costPerUnit: 60, updatedAt: now },
     { id: 'ing_cup16', name: 'Gelas Cup Dingin 16oz + Tutup', unit: 'pcs', currentStock: 450, minStock: 100, costPerUnit: 900, updatedAt: now },
-    { id: 'ing_cuphot', name: 'Paper Cup Hot 8oz + Tutup', unit: 'pcs', currentStock: 250, minStock: 50, costPerUnit: 750, updatedAt: now },
     { id: 'ing_brioche', name: 'Roti Brioche Toast Tebal', unit: 'lembar', currentStock: 80, minStock: 20, costPerUnit: 3500, updatedAt: now },
     { id: 'ing_beef', name: 'Smoked Beef Ham Slice', unit: 'lembar', currentStock: 120, minStock: 30, costPerUnit: 2500, updatedAt: now },
     { id: 'ing_mozza', name: 'Keju Mozzarella Parut', unit: 'gram', currentStock: 1800, minStock: 400, costPerUnit: 140, updatedAt: now },
@@ -258,14 +368,14 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
   ];
   initialIngredients.forEach((ing) => tx.objectStore('ingredients').put(ing));
 
-  // 5. Products with recipes
+  // Products
   const initialProducts: Product[] = [
     {
       id: 'prd_kopisusu',
       name: 'Kopi Susu Gula Aren',
       categoryId: 'cat_coffee',
       price: 22000,
-      costPrice: 8135, // 18g Arabica (3960) + 120ml Milk (2400) + 25ml Aren (875) + 1 Cup (900)
+      costPrice: 8135,
       isAvailable: true,
       image: 'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=500&q=80',
       description: 'Espresso Arabika Gayo dipadu susu segar lembut dan gula aren murni.',
@@ -296,38 +406,13 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
       name: 'Cafe Latte',
       categoryId: 'cat_coffee',
       price: 26000,
-      costPrice: 8460, // 18g Arabica + 180ml Milk + 1 Cup
+      costPrice: 8460,
       isAvailable: true,
       image: 'https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?auto=format&fit=crop&w=500&q=80',
       description: 'Espresso aromatik berpadu steamed fresh milk halus.',
       recipe: [
         { ingredientId: 'ing_arabica', quantity: 18 },
         { ingredientId: 'ing_freshmilk', quantity: 180 },
-        { ingredientId: 'ing_cup16', quantity: 1 },
-      ],
-      variations: [
-        {
-          name: 'Sajian',
-          options: [
-            { id: 'ice', name: 'Iced Latte', priceDelta: 0 },
-            { id: 'hot', name: 'Hot Latte (8oz)', priceDelta: 0 },
-          ],
-        },
-      ],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'prd_americano',
-      name: 'Iced Americano',
-      categoryId: 'cat_coffee',
-      price: 20000,
-      costPrice: 4860, // 18g Arabica + 1 Cup
-      isAvailable: true,
-      image: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=500&q=80',
-      description: 'Double shot espresso murni dengan air es mineral menyegarkan.',
-      recipe: [
-        { ingredientId: 'ing_arabica', quantity: 18 },
         { ingredientId: 'ing_cup16', quantity: 1 },
       ],
       createdAt: now,
@@ -338,49 +423,13 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
       name: 'Matcha Latte Uji',
       categoryId: 'cat_noncoffee',
       price: 28000,
-      costPrice: 9750, // 15g Matcha (5250) + 180ml Milk (3600) + 1 Cup (900)
+      costPrice: 9750,
       isAvailable: true,
       image: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&w=500&q=80',
       description: 'Matcha otentik Jepang dengan creamy milk bercita rasa earthy lembut.',
       recipe: [
         { ingredientId: 'ing_matcha', quantity: 15 },
         { ingredientId: 'ing_freshmilk', quantity: 180 },
-        { ingredientId: 'ing_cup16', quantity: 1 },
-      ],
-      modifiers: [
-        { name: 'Tingkat Manis', options: ['Normal Sweet', 'Less Sweet', 'No Sugar'] },
-      ],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'prd_chocolate',
-      name: 'Signature Iced Chocolate',
-      categoryId: 'cat_noncoffee',
-      price: 25000,
-      costPrice: 8250, // 25g Cokelat (3750) + 180ml Milk (3600) + 1 Cup (900)
-      isAvailable: true,
-      image: 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?auto=format&fit=crop&w=500&q=80',
-      description: 'Cokelat Belgia Batavia kaya rasa dan gurih manis pas.',
-      recipe: [
-        { ingredientId: 'ing_cokelat', quantity: 25 },
-        { ingredientId: 'ing_freshmilk', quantity: 180 },
-        { ingredientId: 'ing_cup16', quantity: 1 },
-      ],
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'prd_lycheetea',
-      name: 'Iced Lychee Tea Jasmine',
-      categoryId: 'cat_noncoffee',
-      price: 18000,
-      costPrice: 1500, // 10g Teh (600) + 1 Cup (900)
-      isAvailable: true,
-      image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=500&q=80',
-      description: 'Seduhan teh melati wangi dengan aroma buah leci segar manis.',
-      recipe: [
-        { ingredientId: 'ing_tea', quantity: 10 },
         { ingredientId: 'ing_cup16', quantity: 1 },
       ],
       createdAt: now,
@@ -391,7 +440,7 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
       name: 'Smoked Beef & Cheese Toast',
       categoryId: 'cat_food',
       price: 32000,
-      costPrice: 17600, // 2 Brioche (7000) + 2 Beef (5000) + 40g Mozza (5600)
+      costPrice: 17600,
       isAvailable: true,
       image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=500&q=80',
       description: 'Roti panggang brioche mentega dengan irisan daging asap dan keju lumer.',
@@ -403,25 +452,10 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
       createdAt: now,
       updatedAt: now,
     },
-    {
-      id: 'prd_fries',
-      name: 'Crispy Truffle French Fries',
-      categoryId: 'cat_snack',
-      price: 24000,
-      costPrice: 8100, // 180g Fries (8100)
-      isAvailable: true,
-      image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=500&q=80',
-      description: 'Kentang goreng renyah bumbu truffle gurih disajikan dengan saus cocol.',
-      recipe: [
-        { ingredientId: 'ing_fries', quantity: 180 },
-      ],
-      createdAt: now,
-      updatedAt: now,
-    },
   ];
   initialProducts.forEach((p) => tx.objectStore('products').put(p));
 
-  // 6. Suppliers
+  // Suppliers
   const initialSuppliers: Supplier[] = [
     {
       id: 'sup_roastery',
@@ -432,52 +466,18 @@ export async function seedInitialDataIfNeeded(): Promise<void> {
       address: 'Jl. Kopo No. 128, Bandung',
       paymentTerms: 'Tempo 14 Hari',
     },
-    {
-      id: 'sup_dairy',
-      name: 'PT Sumber Pangan Segar Nusantara',
-      contactPerson: 'Maya Kartika',
-      phone: '0812-9988-7766',
-      email: 'order@sumberpangan.com',
-      address: 'Kawasan Industri Pulogadung Blok B4, Jakarta Timur',
-      paymentTerms: 'COD / Tunai',
-    },
-    {
-      id: 'sup_packaging',
-      name: 'Toko Kemasan Lestari',
-      contactPerson: 'Joko Purnomo',
-      phone: '0813-7766-5544',
-      email: 'kemasanlestari@gmail.com',
-      address: 'Pasar Pagi Mangga Dua Lt. 2 No. 15, Jakarta Utara',
-      paymentTerms: 'Tunai',
-    },
   ];
   initialSuppliers.forEach((s) => tx.objectStore('suppliers').put(s));
 
-  // 7. Initial Cashier Session (Open)
-  const initialSession: CashSession = {
-    id: 'sess_' + Date.now(),
-    cashierId: 'usr_cashier',
-    cashierName: 'Dimas Pratama',
-    openedAt: new Date(Date.now() - 3600000 * 3).toISOString(), // 3 hours ago
-    openingBalance: 200000, // Rp 200.000 modal awal
-    cashSales: 0,
-    nonCashSales: 0,
-    expectedCash: 200000,
-    status: 'open',
-    notes: 'Shift Pagi - Kasir Utama',
-  };
-  tx.objectStore('cash_sessions').put(initialSession);
-
-  // 8. Audit Log
-  const initialLog: AuditLog = {
+  const log: AuditLog = {
     id: generateUUID(),
     timestamp: now,
-    userName: 'Sistem POS Lapak',
+    userName: 'Owner',
     role: 'owner',
-    action: 'Inisialisasi Database',
-    details: 'Database awal POS Lapak, bahan baku resep, dan pengguna berhasil dibuat.',
+    action: 'Muat Menu Contoh',
+    details: 'Berhasil memuat 4 menu sampel kopi & makanan beserta bahan baku resep.',
   };
-  tx.objectStore('audit_logs').put(initialLog);
+  tx.objectStore('audit_logs').put(log);
 
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => {

@@ -1,0 +1,6 @@
+{
+  "name": "KedaiOS - Sistem Manajemen Kafe",
+  "description": "Sistem manajemen kafe dan kasir POS modern, offline-first PWA dengan manajemen inventaris resep, laporan keuangan, dan multi-peran.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#334155" stroke-width="4" stroke-opacity="0.6"/>
+  
+  <!-- Cafe Cup Group -->
+  <g filter="url(#shadow)" transform="translate(48, 56)">
+    <!-- Steam lines -->
+    <path d="M140 100 Q155 70 140 40 Q125 10 140 -10" fill="none" stroke="#f59e0b" stroke-width="14" stroke-linecap="round" opacity="0.8"/>
+    <path d="M208 90 Q223 60 208 30 Q193 0 208 -20" fill="none" stroke="#fbbf24" stroke-width="16" stroke-linecap="round" opacity="0.95"/>
+    <path d="M276 100 Q291 70 276 40 Q261 10 276 -10" fill="none" stroke="#f59e0b" stroke-width="14" stroke-linecap="round" opacity="0.8"/>
+
+    <!-- Cup Body -->
+    <path d="M72 130 L344 130 L320 280 C316 320 280 350 240 350 L176 350 C136 350 100 320 96 280 Z" fill="url(#amberGrad)"/>
+    
+    <!-- Cup Rim Highlight -->
+    <path d="M72 130 Q208 144 344 130" stroke="#fef3c7" stroke-width="6" fill="none"/>
+
+    <!-- Cup Handle -->
+    <path d="M336 160 C380 160 410 185 410 220 C410 255 378 280 326 280" fill="none" stroke="url(#amberGrad)" stroke-width="28" stroke-linecap="round"/>
+
+    <!-- Modern POS / Retail Dot Indicator -->
+    <circle cx="208" cy="240" r="28" fill="#0f172a" />
+    <path d="M196 240 L204 248 L222 230" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- Base Plate -->
+    <rect x="56" y="365" width="304" height="24" rx="12" fill="#475569" opacity="0.7"/>
+  </g>
+</svg>

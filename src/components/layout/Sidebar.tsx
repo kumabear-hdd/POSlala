@@ -76,12 +76,12 @@ export const Sidebar: React.FC<{ isMobileMenuOpen: boolean; onCloseMobileMenu: (
 
       {/* Sidebar container */}
       <aside
-        className={`fixed md:sticky top-16 z-30 h-[calc(100vh-4rem)] w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-transform duration-200 ease-in-out select-none ${
+        className={`fixed md:sticky top-16 z-30 h-[calc(100vh-4rem)] w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transition-transform duration-200 ease-in-out select-none overflow-hidden ${
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* Navigation list */}
-        <div className="p-3 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-slate-800">
+        {/* Navigation list (div 1) */}
+        <div className="p-3 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-slate-800 flex-1 min-h-0">
           <div className="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             Menu Operasional
           </div>
@@ -121,8 +121,8 @@ export const Sidebar: React.FC<{ isMobileMenuOpen: boolean; onCloseMobileMenu: (
           })}
         </div>
 
-        {/* Footer info card */}
-        <div className="p-3 border-t border-slate-800">
+        {/* Footer info card (div 2) */}
+        <div className="p-3 border-t border-slate-800 shrink-0 bg-slate-900/90 backdrop-blur-xs">
           <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400">
             <div className="flex items-center justify-between font-semibold text-slate-300 mb-1">
               <span>POS Lapak v1.2</span>
